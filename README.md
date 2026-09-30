@@ -7,7 +7,7 @@ ziran add https://github.com/ziranlang/sqlite.git
 ```
 
 ```zi
-#import "SQLite/SQLite"
+#import "sqlite/SQLite"
 
 database: *void = null
 flags: s32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
