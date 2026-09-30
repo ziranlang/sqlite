@@ -44,6 +44,7 @@ BackupStepRaw :: (backup: *void, pages: s32) -> s32 #foreign sqlite "sqlite3_bac
 BackupFinishRaw :: (backup: *void) -> s32 #foreign sqlite "sqlite3_backup_finish";
 ExecRaw :: (database: *void, sql: *u8, callback: *void,
     argument: *void, error: **u8) -> s32 #foreign sqlite "sqlite3_exec";
+LastInsertRowidRaw :: (database: *void) -> s64 #foreign sqlite "sqlite3_last_insert_rowid";
 
 CopyStringBytes :: (source: string, destination: *u8) {
     index: s32 = 0
@@ -188,6 +189,12 @@ SqliteBackupStep :: (backup: *void, pages: s32) -> s32 {
 #program_export
 SqliteBackupFinish :: (backup: *void) -> s32 {
     return BackupFinishRaw(backup)
+}
+
+// The rowid of the last row inserted through this connection.
+#program_export
+SqliteLastInsertRowid :: (database: *void) -> s64 {
+    return LastInsertRowidRaw(database)
 }
 
 #program_export

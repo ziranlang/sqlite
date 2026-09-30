@@ -44,6 +44,9 @@ main :: () -> s32 {
         SqliteStep(statement) != SQLITE_DONE {
         return 6
     }
+    if SqliteLastInsertRowid(database) != 2 {
+        return 16
+    }
     if SqliteFinalize(statement) != SQLITE_OK {
         return 7
     }
