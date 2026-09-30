@@ -7,4 +7,9 @@ git = "https://github.com/ziranlang/ziran.git"
 ref = "master"
 
 [exports]
-SQLite = "src/sqlite.zi"
+SQLite = "src/SQLite.zi"
+
+[dependencies.sqlite3]
+git = "https://github.com/sqlite/sqlite.git"
+ref = "version-3.53.4"
+source = true
