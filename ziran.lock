@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "packages": [
+
+  ],
+  "root": {
+    "dependencies": {},
+    "name": "SQLite"
+  },
+  "toolchain": {
+    "commit": "d4489a3e09de5769256eca4994382f25208e99d8",
+    "ref": "master",
+    "url": "https://github.com/ziranlang/ziran.git"
+  }
+}

@@ -1,0 +1,82 @@
+#import "sqlite"
+
+// Reads a NUL-terminated column value as text.
+Same :: (value: *u8, expected: string) -> bool {
+    if value == null {
+        return false
+    }
+    index: s64 = 0
+    while index < expected.count {
+        if value[index] != expected[index] {
+            return false
+        }
+        index += 1
+    }
+    return value[expected.count] == cast(u8)0
+}
+
+#program_export
+main :: () -> s32 {
+    path: [9]u8 = .{58, 109, 101, 109, 111, 114, 121, 58, 0}
+    database: *void = null
+    flags: s32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+    if SqliteOpen(*path[0], *database, flags) != SQLITE_OK || database == null {
+        return 1
+    }
+    if SqliteExecText(database, "create table votes (voter text not null, score integer not null)") != SQLITE_OK {
+        return 2
+    }
+    statement: *void = null
+    if SqlitePrepareText(database, "insert into votes (voter, score) values (?, ?)", -1, *statement, null) != SQLITE_OK {
+        return 3
+    }
+    // Binding copies the text, so a temporary Ziran string is safe.
+    if SqliteBindTextString(statement, 1, "Café \"night\"", -1) != SQLITE_OK ||
+        SqliteBindInt(statement, 2, -3) != SQLITE_OK ||
+        SqliteStep(statement) != SQLITE_DONE {
+        return 4
+    }
+    if SqliteReset(statement) != SQLITE_OK || SqliteClearBindings(statement) != SQLITE_OK {
+        return 5
+    }
+    if SqliteBindTextString(statement, 1, "bob", -1) != SQLITE_OK ||
+        SqliteBindInt64(statement, 2, 5000000000) != SQLITE_OK ||
+        SqliteStep(statement) != SQLITE_DONE {
+        return 6
+    }
+    if SqliteFinalize(statement) != SQLITE_OK {
+        return 7
+    }
+    if SqlitePrepareText(database, "select voter, score from votes order by rowid", -1, *statement, null) != SQLITE_OK {
+        return 8
+    }
+    if SqliteStep(statement) != SQLITE_ROW || !Same(SqliteColumnText(statement, 0), "Café \"night\"") ||
+        SqliteColumnInt(statement, 1) != -3 {
+        return 9
+    }
+    if SqliteStep(statement) != SQLITE_ROW || SqliteColumnInt64(statement, 1) != 5000000000 {
+        return 10
+    }
+    if SqliteStep(statement) != SQLITE_DONE || SqliteFinalize(statement) != SQLITE_OK {
+        return 11
+    }
+    // A statement longer than the short buffers takes the allocated path.
+    long_sql := "select 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        "
+    if SqlitePrepareText(database, long_sql, -1, *statement, null) != SQLITE_OK ||
+        SqliteStep(statement) != SQLITE_ROW || SqliteColumnInt(statement, 0) != 1 ||
+        SqliteFinalize(statement) != SQLITE_OK {
+        return 12
+    }
+    if SqliteExecText(database, "not sql") == SQLITE_OK {
+        return 13
+    }
+    // A tail pointer is refused: the copied SQL does not outlive the call.
+    tail: *u8 = null
+    if SqlitePrepareText(database, "select 1", -1, *statement, *tail) != SQLITE_MISUSE {
+        return 14
+    }
+    if SqliteClose(database) != SQLITE_OK {
+        return 15
+    }
+    return 0
+}
