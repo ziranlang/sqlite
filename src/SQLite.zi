@@ -15,6 +15,11 @@ SQLITE_MISUSE :: 21;
 SQLITE_OPEN_READWRITE :: 0x2;
 SQLITE_OPEN_CREATE :: 0x4;
 SQLITE_OPEN_FULLMUTEX :: 0x10000;
+SQLITE_INTEGER :: 1;
+SQLITE_FLOAT :: 2;
+SQLITE_TEXT :: 3;
+SQLITE_BLOB :: 4;
+SQLITE_NULL :: 5;
 
 #scope_file
 sqlite :: #system_library "sqlite3";
@@ -45,6 +50,21 @@ BackupFinishRaw :: (backup: *void) -> s32 #foreign sqlite "sqlite3_backup_finish
 ExecRaw :: (database: *void, sql: *u8, callback: *void,
     argument: *void, error: **u8) -> s32 #foreign sqlite "sqlite3_exec";
 LastInsertRowidRaw :: (database: *void) -> s64 #foreign sqlite "sqlite3_last_insert_rowid";
+VersionNumberRaw :: () -> s32 #foreign sqlite "sqlite3_libversion_number";
+ErrorCodeRaw :: (database: *void) -> s32 #foreign sqlite "sqlite3_errcode";
+ErrorMessageRaw :: (database: *void) -> *u8 #foreign sqlite "sqlite3_errmsg";
+BusyTimeoutRaw :: (database: *void, milliseconds: s32) -> s32 #foreign sqlite "sqlite3_busy_timeout";
+ChangesRaw :: (database: *void) -> s32 #foreign sqlite "sqlite3_changes";
+BindNullRaw :: (statement: *void, index: s32) -> s32 #foreign sqlite "sqlite3_bind_null";
+BindDoubleRaw :: (statement: *void, index: s32, value: float64) -> s32 #foreign sqlite "sqlite3_bind_double";
+BindBlobRaw :: (statement: *void, index: s32, value: *u8,
+    length: s32, destructor: *void) -> s32 #foreign sqlite "sqlite3_bind_blob";
+BindZeroBlobRaw :: (statement: *void, index: s32, length: s32) -> s32 #foreign sqlite "sqlite3_bind_zeroblob";
+ColumnBlobRaw :: (statement: *void, column: s32) -> *u8 #foreign sqlite "sqlite3_column_blob";
+ColumnBytesRaw :: (statement: *void, column: s32) -> s32 #foreign sqlite "sqlite3_column_bytes";
+ColumnDoubleRaw :: (statement: *void, column: s32) -> float64 #foreign sqlite "sqlite3_column_double";
+ColumnTypeRaw :: (statement: *void, column: s32) -> s32 #foreign sqlite "sqlite3_column_type";
+ColumnCountRaw :: (statement: *void) -> s32 #foreign sqlite "sqlite3_column_count";
 
 CopyStringBytes :: (source: string, destination: *u8) {
     index: s32 = 0
@@ -166,6 +186,22 @@ SqliteOpen :: (path: *u8, database: **void, flags: s32) -> s32 {
 }
 
 #program_export
+SqliteOpenText :: (path: string, database: **void, flags: s32) -> s32 {
+    if path.count > 2147483647 { return SQLITE_TOOBIG }
+    if path.count < 512 {
+        short_path: [512]u8
+        CopyStringBytes(path, *short_path[0])
+        return OpenRaw(*short_path[0], database, flags, null)
+    }
+    buffer: *u8 = cast(*u8)malloc(cast(usize)path.count + 1)
+    if buffer == null { return SQLITE_NOMEM }
+    CopyStringBytes(path, buffer)
+    result := OpenRaw(buffer, database, flags, null)
+    free(cast(*void)buffer)
+    return result
+}
+
+#program_export
 SqliteClose :: (database: *void) -> s32 {
     return CloseRaw(database)
 }
@@ -221,3 +257,42 @@ SqliteExecText :: (database: *void, sql: string) -> s32 {
     free(cast(*void)buffer)
     return result
 }
+
+#program_export
+SqliteVersionNumber :: () -> s32 { return VersionNumberRaw() }
+#program_export
+SqliteErrorCode :: (database: *void) -> s32 { return ErrorCodeRaw(database) }
+// The message is borrowed until another operation changes the connection.
+#program_export
+SqliteErrorMessage :: (database: *void) -> *u8 { return ErrorMessageRaw(database) }
+#program_export
+SqliteBusyTimeout :: (database: *void, milliseconds: s32) -> s32 {
+    return BusyTimeoutRaw(database, milliseconds)
+}
+#program_export
+SqliteChanges :: (database: *void) -> s32 { return ChangesRaw(database) }
+#program_export
+SqliteBindNull :: (statement: *void, index: s32) -> s32 { return BindNullRaw(statement, index) }
+#program_export
+SqliteBindDouble :: (statement: *void, index: s32, value: float64) -> s32 {
+    return BindDoubleRaw(statement, index, value)
+}
+// Copies binary bytes, including embedded NULs. Empty bytes are an empty BLOB.
+#program_export
+SqliteBindBlob :: (statement: *void, index: s32, value: []u8) -> s32 {
+    if value.count > 2147483647 { return SQLITE_TOOBIG }
+    if value.count == 0 { return BindZeroBlobRaw(statement, index, 0) }
+    return BindBlobRaw(statement, index, *value[0], cast(s32)value.count,
+        cast(*void)cast(s64)SQLITE_TRANSIENT)
+}
+// Column bytes are borrowed until Step, Reset or Finalize changes the statement.
+#program_export
+SqliteColumnBlob :: (statement: *void, column: s32) -> *u8 { return ColumnBlobRaw(statement, column) }
+#program_export
+SqliteColumnBytes :: (statement: *void, column: s32) -> s32 { return ColumnBytesRaw(statement, column) }
+#program_export
+SqliteColumnDouble :: (statement: *void, column: s32) -> float64 { return ColumnDoubleRaw(statement, column) }
+#program_export
+SqliteColumnType :: (statement: *void, column: s32) -> s32 { return ColumnTypeRaw(statement, column) }
+#program_export
+SqliteColumnCount :: (statement: *void) -> s32 { return ColumnCountRaw(statement) }

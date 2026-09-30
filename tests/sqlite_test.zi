@@ -1,4 +1,4 @@
-#import "sqlite"
+#import "SQLite"
 
 // Reads a NUL-terminated column value as text.
 Same :: (value: *u8, expected: string) -> bool {
@@ -73,6 +73,36 @@ main :: () -> s32 {
     if SqliteExecText(database, "not sql") == SQLITE_OK {
         return 13
     }
+    if SqliteErrorCode(database) == SQLITE_OK || SqliteErrorMessage(database) == null ||
+       SqliteVersionNumber() < 3000000 || SqliteBusyTimeout(database, 100) != SQLITE_OK { return 17 }
+    if SqliteExecText(database, "create table binary_values (data blob, value real, absent text)") != SQLITE_OK { return 18 }
+    if SqlitePrepareText(database, "insert into binary_values values (?, ?, ?)", -1, *statement, null) != SQLITE_OK { return 19 }
+    blob: [3]u8 = .{1, 0, 255}
+    if SqliteBindBlob(statement, 1, blob[:]) != SQLITE_OK ||
+       SqliteBindDouble(statement, 2, 1.25) != SQLITE_OK ||
+       SqliteBindNull(statement, 3) != SQLITE_OK { return 20 }
+    // Bind copied the original binary data.
+    blob[0] = cast(u8)99
+    if SqliteStep(statement) != SQLITE_DONE || SqliteChanges(database) != 1 { return 21 }
+    if SqliteReset(statement) != SQLITE_OK ||
+       SqliteBindBlob(statement, 1, blob[0:0]) != SQLITE_OK ||
+       SqliteStep(statement) != SQLITE_DONE || SqliteFinalize(statement) != SQLITE_OK { return 22 }
+    if SqlitePrepareText(database, "select data, value, absent from binary_values order by rowid", -1, *statement, null) != SQLITE_OK { return 23 }
+    if SqliteStep(statement) != SQLITE_ROW || SqliteColumnCount(statement) != 3 ||
+       SqliteColumnType(statement, 0) != SQLITE_BLOB || SqliteColumnBytes(statement, 0) != 3 ||
+       SqliteColumnDouble(statement, 1) != 1.25 || SqliteColumnType(statement, 2) != SQLITE_NULL { return 24 }
+    bytes := SqliteColumnBlob(statement, 0)
+    if bytes == null || bytes[0] != 1 || bytes[1] != 0 || bytes[2] != 255 { return 25 }
+    if SqliteStep(statement) != SQLITE_ROW || SqliteColumnType(statement, 0) != SQLITE_BLOB ||
+       SqliteColumnBytes(statement, 0) != 0 || SqliteFinalize(statement) != SQLITE_OK { return 26 }
+    copy: *void = null
+    if SqliteOpenText(":memory:", *copy, flags) != SQLITE_OK { return 27 }
+    backup := SqliteBackupInit(copy, database)
+    if backup == null || SqliteBackupStep(backup, -1) != SQLITE_DONE ||
+       SqliteBackupFinish(backup) != SQLITE_OK { return 28 }
+    if SqlitePrepareText(copy, "select count(*) from binary_values", -1, *statement, null) != SQLITE_OK ||
+       SqliteStep(statement) != SQLITE_ROW || SqliteColumnInt(statement, 0) != 2 ||
+       SqliteFinalize(statement) != SQLITE_OK || SqliteClose(copy) != SQLITE_OK { return 29 }
     // A tail pointer is refused: the copied SQL does not outlive the call.
     tail: *u8 = null
     if SqlitePrepareText(database, "select 1", -1, *statement, *tail) != SQLITE_MISUSE {

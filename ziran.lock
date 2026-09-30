@@ -1,14 +1,22 @@
 {
   "format": 1,
   "packages": [
-
+    {
+      "commit": "b09c88c14082339b66c7b7158d609a771e64ca69",
+      "dependencies": {},
+      "id": "pbeb32cf8d2e03b02",
+      "name": "sqlite3",
+      "ref": "version-3.53.4",
+      "source": true,
+      "url": "https://github.com/sqlite/sqlite.git"
+    }
   ],
   "root": {
-    "dependencies": {},
+    "dependencies": {"sqlite3": "pbeb32cf8d2e03b02"},
     "name": "SQLite"
   },
   "toolchain": {
-    "commit": "d4489a3e09de5769256eca4994382f25208e99d8",
+    "commit": "f1ebf1a2b22f9d221264ff5657e35f278beef48f",
     "ref": "master",
     "url": "https://github.com/ziranlang/ziran.git"
   }
