@@ -11,8 +11,9 @@ ziran add https://github.com/ziranlang/sqlite.git
 
 database: *void = null
 flags: s32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
-if SqliteOpen(path, *database, flags) == SQLITE_OK {
+if SqliteOpenText(":memory:", *database, flags) == SQLITE_OK {
     SqliteExecText(database, "create table if not exists votes (voter text, score integer)")
+    SqliteClose(database)
 }
 ```
 
