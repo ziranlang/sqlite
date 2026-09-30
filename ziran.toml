@@ -1,0 +1,10 @@
+[package]
+name = "SQLite"
+module_roots = ["src", "tests"]
+
+[toolchain]
+git = "https://github.com/ziranlang/ziran.git"
+ref = "master"
+
+[exports]
+SQLite = "src/sqlite.zi"
