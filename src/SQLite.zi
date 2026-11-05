@@ -21,6 +21,10 @@ SQLITE_TEXT :: 3;
 SQLITE_BLOB :: 4;
 SQLITE_NULL :: 5;
 
+// C callbacks. The caller keeps data alive until SQLite invokes destroy.
+SqliteScalar :: #type (context: *void, argc: s32, argv: **void) #c_call;
+SqliteDestructor :: #type (data: *void) #c_call;
+
 #scope_file
 sqlite :: #system_library "sqlite3";
 c :: #system_library "c";
@@ -55,6 +59,7 @@ ErrorCodeRaw :: (database: *void) -> s32 #foreign sqlite "sqlite3_errcode";
 ErrorMessageRaw :: (database: *void) -> *u8 #foreign sqlite "sqlite3_errmsg";
 BusyTimeoutRaw :: (database: *void, milliseconds: s32) -> s32 #foreign sqlite "sqlite3_busy_timeout";
 ChangesRaw :: (database: *void) -> s32 #foreign sqlite "sqlite3_changes";
+GetAutocommitRaw :: (database: *void) -> s32 #foreign sqlite "sqlite3_get_autocommit";
 BindNullRaw :: (statement: *void, index: s32) -> s32 #foreign sqlite "sqlite3_bind_null";
 BindDoubleRaw :: (statement: *void, index: s32, value: float64) -> s32 #foreign sqlite "sqlite3_bind_double";
 BindBlobRaw :: (statement: *void, index: s32, value: *u8,
@@ -65,6 +70,15 @@ ColumnBytesRaw :: (statement: *void, column: s32) -> s32 #foreign sqlite "sqlite
 ColumnDoubleRaw :: (statement: *void, column: s32) -> float64 #foreign sqlite "sqlite3_column_double";
 ColumnTypeRaw :: (statement: *void, column: s32) -> s32 #foreign sqlite "sqlite3_column_type";
 ColumnCountRaw :: (statement: *void) -> s32 #foreign sqlite "sqlite3_column_count";
+
+CreateFunctionRaw :: (database: *void, name: *u8, argc: s32, flags: s32,
+    data: *void, callback: SqliteScalar, step: *void, final: *void,
+    destroy: SqliteDestructor) -> s32 #foreign sqlite "sqlite3_create_function_v2";
+UserDataRaw :: (context: *void) -> *void #foreign sqlite "sqlite3_user_data";
+ValueTypeRaw :: (value: *void) -> s32 #foreign sqlite "sqlite3_value_type";
+ValueBytesRaw :: (value: *void) -> s32 #foreign sqlite "sqlite3_value_bytes";
+ValueBlobRaw :: (value: *void) -> *void #foreign sqlite "sqlite3_value_blob";
+ResultDoubleRaw :: (context: *void, value: float64) #foreign sqlite "sqlite3_result_double";
 
 CopyStringBytes :: (source: string, destination: *u8) {
     index: s32 = 0
@@ -206,6 +220,14 @@ SqliteClose :: (database: *void) -> s32 {
     return CloseRaw(database)
 }
 
+// True when this connection has no active transaction. A null handle is false.
+// As with SQLite itself, the caller must keep the connection alive for the call.
+#program_export
+SqliteGetAutocommit :: (database: *void) -> bool {
+    if database == null { return false }
+    return GetAutocommitRaw(database) != 0
+}
+
 #program_export
 SqliteBackupInit :: (destination: *void, source: *void) -> *void {
     name: [5]u8
@@ -296,3 +318,22 @@ SqliteColumnDouble :: (statement: *void, column: s32) -> float64 { return Column
 SqliteColumnType :: (statement: *void, column: s32) -> s32 { return ColumnTypeRaw(statement, column) }
 #program_export
 SqliteColumnCount :: (statement: *void) -> s32 { return ColumnCountRaw(statement) }
+
+// Direct SQLite lifetime: destroy also runs when registration fails.
+#program_export
+SqliteCreateFunction :: (database: *void, name: *u8, argc: s32, flags: s32,
+    data: *void, callback: SqliteScalar, step: *void, final: *void,
+    destroy: SqliteDestructor) -> s32 {
+    return CreateFunctionRaw(database, name, argc, flags, data, callback, step, final, destroy)
+}
+#program_export
+SqliteUserData :: (context: *void) -> *void { return UserDataRaw(context) }
+#program_export
+SqliteValueType :: (value: *void) -> s32 { return ValueTypeRaw(value) }
+#program_export
+SqliteValueBytes :: (value: *void) -> s32 { return ValueBytesRaw(value) }
+// Callback value bytes are borrowed; consume them before the callback returns.
+#program_export
+SqliteValueBlob :: (value: *void) -> *void { return ValueBlobRaw(value) }
+#program_export
+SqliteResultDouble :: (context: *void, value: float64) { ResultDoubleRaw(context, value) }

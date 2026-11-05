@@ -1,0 +1,87 @@
+#import "SQLite"
+
+CallbackState :: struct { bias: float64; calls: s32; destroyed: s32; }
+
+Observe :: (context: *void, argc: s32, argv: **void) {
+    state := cast(*CallbackState)SqliteUserData(context)
+    if state == null || argc != 1 || argv == null {
+        SqliteResultDouble(context, -10000.0)
+        return
+    }
+    state.calls += 1
+    kind := SqliteValueType(argv[0])
+    value := state.bias - cast(float64)kind
+    if kind == SQLITE_BLOB {
+        count := SqliteValueBytes(argv[0])
+        bytes := cast(*u8)SqliteValueBlob(argv[0])
+        value = state.bias
+        index: s32 = 0
+        while index < count {
+            if bytes == null { SqliteResultDouble(context, -10001.0); return }
+            value += cast(float64)bytes[index]
+            index += 1
+        }
+    }
+    SqliteResultDouble(context, value)
+}
+
+Destroy :: (data: *void) {
+    state := cast(*CallbackState)data
+    if state != null { state.destroyed += 1 }
+}
+
+Query :: (database: *void, expected: float64) -> bool {
+    statement: *void = null
+    if SqlitePrepareText(database, "select observe(x'0100ff'),observe(x''),observe(NULL),observe(7),observe('café')", -1, *statement, null) != SQLITE_OK { return false }
+    defer SqliteFinalize(statement)
+    return SqliteStep(statement) == SQLITE_ROW &&
+        SqliteColumnDouble(statement, 0) == expected + 256.0 &&
+        SqliteColumnDouble(statement, 1) == expected &&
+        SqliteColumnDouble(statement, 2) == expected - 5.0 &&
+        SqliteColumnDouble(statement, 3) == expected - 1.0 &&
+        SqliteColumnDouble(statement, 4) == expected - 3.0
+}
+
+#program_export
+main :: () -> s32 {
+    flags: s32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+    database: *void = null
+    other: *void = null
+    if SqliteOpenText(":memory:", *database, flags) != SQLITE_OK ||
+       SqliteOpenText(":memory:", *other, flags) != SQLITE_OK { return 1 }
+    name: [8]u8 = .{111,98,115,101,114,118,101,0}
+    first: CallbackState = .{bias=10.0}
+    second: CallbackState = .{bias=100.0}
+    replacement: CallbackState = .{bias=20.0}
+    failed: CallbackState = .{bias=30.0}
+    final_state: CallbackState = .{bias=40.0}
+    // SQLITE_UTF8 is SQLite's documented text encoding value 1.
+    if SqliteCreateFunction(database, *name[0], 1, 1, cast(*void)*first, Observe, null, null, Destroy) != SQLITE_OK ||
+       SqliteCreateFunction(other, *name[0], 1, 1, cast(*void)*second, Observe, null, null, Destroy) != SQLITE_OK { return 2 }
+    if !Query(database, 10.0) || !Query(other, 100.0) || !Query(database, 10.0) ||
+       first.calls != 10 || second.calls != 5 || first.destroyed != 0 || second.destroyed != 0 { return 3 }
+    // SQLite invokes the replaced registration's destructor synchronously.
+    if SqliteCreateFunction(database, *name[0], 1, 1, cast(*void)*replacement, Observe, null, null, Destroy) != SQLITE_OK ||
+       first.destroyed != 1 || replacement.destroyed != 0 || !Query(database, 20.0) ||
+       !Query(other, 100.0) || second.destroyed != 0 { return 4 }
+    // A 256-byte UTF-8 name is documented to fail with SQLITE_MISUSE.
+    // Unlike an invalid argc, it does not invoke undefined SQLite behavior.
+    too_long: [257]u8
+    index: s32 = 0
+    while index < 256 { too_long[index] = cast(u8)120; index += 1 }
+    too_long[256] = cast(u8)0
+    if SqliteCreateFunction(database, *too_long[0], 1, 1, cast(*void)*failed, Observe, null, null, Destroy) != SQLITE_MISUSE ||
+       failed.destroyed != 1 || !Query(database, 20.0) { return 5 }
+    if SqliteClose(database) != SQLITE_OK || first.destroyed != 1 ||
+       replacement.destroyed != 1 || failed.destroyed != 1 || second.destroyed != 0 { return 6 }
+    // All three null function callbacks delete the function, releasing data.
+    empty: *void = null
+    no_scalar := cast(SqliteScalar)empty
+    no_destructor := cast(SqliteDestructor)empty
+    if SqliteCreateFunction(other, *name[0], 1, 1, null, no_scalar, null, null, no_destructor) != SQLITE_OK || second.destroyed != 1 { return 7 }
+    if SqliteCreateFunction(other, *name[0], 1, 1, cast(*void)*final_state, Observe, null, null, Destroy) != SQLITE_OK ||
+       !Query(other, 40.0) || final_state.destroyed != 0 { return 8 }
+    if SqliteClose(other) != SQLITE_OK || second.destroyed != 1 || final_state.destroyed != 1 ||
+       first.destroyed != 1 || replacement.destroyed != 1 || failed.destroyed != 1 { return 9 }
+    return 0
+}

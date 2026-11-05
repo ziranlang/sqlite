@@ -35,5 +35,7 @@ test: native
 		--library-dir $(BUILD)/native '--libraries=-lsqlite3 -lm -ldl -pthread' \
 		--target $(TARGET)
 
+	python3 "$$($(ZIRAN) pkg path ziran)/scripts/test_native_package.py" --ziran "$(ZIRAN)" --source tests/sqlite_callback_test.zi --entry sqlite_callback_test:main --library-dir $(BUILD)/native '--libraries=-lsqlite3 -lm -ldl -pthread' --target c --build-dir $(BUILD)/callback-backends
+
 clean:
 	rm -rf $(BUILD)
