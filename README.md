@@ -3,7 +3,7 @@
 The [SQLite](https://sqlite.org) C library for Ziran programs, as a package.
 
 ```sh
-ziran add https://github.com/ziranlang/sqlite.git
+ziran add https://git.waozi.xyz/ziranlang/sqlite.git
 ```
 
 ```zi

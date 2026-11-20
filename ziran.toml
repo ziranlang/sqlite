@@ -3,8 +3,8 @@ name = "SQLite"
 module_roots = ["src", "tests"]
 
 [toolchain]
-git = "https://github.com/ziranlang/ziran.git"
-ref = "master"
+git = "https://git.waozi.xyz/ziranlang/ziran.git"
+ref = "1d616e3a1761dd4e4a1c5a960c165d30ba16da29"
 
 [exports]
 SQLite = "src/SQLite.zi"
