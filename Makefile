@@ -20,7 +20,7 @@ native: $(SQLITE_A)
 
 $(SQLITE_A): Makefile ziran.lock $(wildcard ziran.local.toml) | prepare
 	mkdir -p $(BUILD)/sqlite3 $(BUILD)/native
-	cd $(BUILD)/sqlite3 && "$$($(ZIRAN) pkg path sqlite3)/configure" \
+	cd $(BUILD)/sqlite3 && "$$($(ZIRAN) pkg path sqlite3 $(LOCK_FLAGS))/configure" \
 		--disable-shared --disable-readline --disable-tcl
 	$(MAKE) -C $(BUILD)/sqlite3 sqlite3.c
 	$(CC) -O2 -fPIC -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 \
@@ -30,12 +30,7 @@ $(SQLITE_A): Makefile ziran.lock $(wildcard ziran.local.toml) | prepare
 	$(AR) rcs $@ $(BUILD)/native/sqlite3.o
 
 test: native
-	python3 "$$($(ZIRAN) pkg path ziran)/scripts/test_native_package.py" \
-		--ziran "$(ZIRAN)" --source tests/sqlite_test.zi --entry sqlite_test:main \
-		--library-dir $(BUILD)/native '--libraries=-lsqlite3 -lm -ldl -pthread' \
-		--target $(TARGET)
-
-	python3 "$$($(ZIRAN) pkg path ziran)/scripts/test_native_package.py" --ziran "$(ZIRAN)" --source tests/sqlite_callback_test.zi --entry sqlite_callback_test:main --library-dir $(BUILD)/native '--libraries=-lsqlite3 -lm -ldl -pthread' --target c --build-dir $(BUILD)/callback-backends
+	ZIRAN="$(ZIRAN)" LOCK_FLAGS="$(LOCK_FLAGS)" sh tests/check.sh "$(TARGET)"
 
 clean:
 	rm -rf $(BUILD)

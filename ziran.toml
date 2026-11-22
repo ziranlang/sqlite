@@ -4,12 +4,12 @@ module_roots = ["src", "tests"]
 
 [toolchain]
 git = "https://git.waozi.xyz/ziranlang/ziran.git"
-ref = "1d616e3a1761dd4e4a1c5a960c165d30ba16da29"
+ref = "5db3d3c39425d5dfe4bfe4a84e6f6e2e5a810ad0"
 
 [exports]
 SQLite = "src/SQLite.zi"
 
 [dependencies.sqlite3]
 git = "https://github.com/sqlite/sqlite.git"
-ref = "version-3.53.4"
+ref = "b09c88c14082339b66c7b7158d609a771e64ca69"
 source = true
