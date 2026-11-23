@@ -42,6 +42,73 @@ Query :: (database: *void, expected: float64) -> bool {
         SqliteColumnDouble(statement, 4) == expected - 3.0
 }
 
+CancelAfter :: (data: *void) -> s32 {
+    remaining := cast(*s32)data
+    <<remaining -= 1
+    return ifx <<remaining <= 0 then 1 else 0
+}
+
+CheckProgress :: (database: *void, other: *void) -> bool {
+    query := "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100) SELECT sum(x) FROM n"
+    remaining: s32 = 3
+    SqliteProgressHandler(database, 1, CancelAfter, cast(*void)*remaining)
+    isolated := SqliteExecText(other, query) == SQLITE_OK && remaining == 3
+    interrupted := SqliteExecText(database, query) == SQLITE_INTERRUPT && remaining == 0
+    SqliteProgressHandler(database, 0, CancelAfter, null)
+    return isolated && interrupted && SqliteExecText(database, query) == SQLITE_OK && remaining == 0
+}
+
+#import "std/vec"
+
+libc :: #system_library "c";
+TemporaryFile :: (path: *u8) -> s32 #foreign libc "mkstemp";
+CloseDescriptor :: (file: s32) -> s32 #foreign libc "close";
+RemoveFile :: (path: *u8) -> s32 #foreign libc "remove";
+
+BusyState :: struct {
+    calls: s32
+    cancelled: bool
+}
+
+RetryBusy :: (data: *void, retries: s32) -> s32 {
+    state := cast(*BusyState)data
+    if state.calls != retries { return 0 }
+    state.calls += 1
+    return ifx !state.cancelled && retries < 2 then 1 else 0
+}
+
+CheckBusy :: () -> bool {
+    pattern := "build/sqlite-busy-XXXXXX"
+    path: [25]u8
+    for index: cast(s64)0..pattern.count - 1 { path[index] = pattern[index] }
+    file := TemporaryFile(*path[0])
+    if file < 0 { return false }
+    defer { unused RemoveFile(*path[0]) }
+    if CloseDescriptor(file) != 0 { return false }
+    name := TextView(path[:pattern.count])
+    first: *void = null
+    second: *void = null
+    flags: s32 = SQLITE_OPEN_READWRITE
+    defer {
+        if second != null { unused SqliteClose(second) }
+        if first != null { unused SqliteClose(first) }
+    }
+    if SqliteOpenText(name, *first, flags) != SQLITE_OK ||
+        SqliteOpenText(name, *second, flags) != SQLITE_OK { return false }
+    state: BusyState
+    if SqliteExecText(first, "BEGIN IMMEDIATE") != SQLITE_OK ||
+        SqliteBusyHandler(second, RetryBusy, cast(*void)*state) != SQLITE_OK ||
+        SqliteExecText(second, "BEGIN IMMEDIATE") != SQLITE_BUSY || state.calls != 3 { return false }
+    state.calls = 0
+    state.cancelled = true
+    if SqliteExecText(second, "BEGIN IMMEDIATE") != SQLITE_BUSY || state.calls != 1 { return false }
+    no_callback := cast(SqliteBusy)cast(*void)null
+    if SqliteBusyHandler(second, no_callback, null) != SQLITE_OK ||
+        SqliteExecText(second, "BEGIN IMMEDIATE") != SQLITE_BUSY || state.calls != 1 { return false }
+    return SqliteExecText(first, "ROLLBACK") == SQLITE_OK &&
+        SqliteExecText(second, "BEGIN IMMEDIATE; ROLLBACK") == SQLITE_OK
+}
+
 #program_export
 main :: () -> s32 {
     flags: s32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
@@ -58,6 +125,8 @@ main :: () -> s32 {
     // SQLITE_UTF8 is SQLite's documented text encoding value 1.
     if SqliteCreateFunction(database, *name[0], 1, 1, cast(*void)*first, Observe, null, null, Destroy) != SQLITE_OK ||
        SqliteCreateFunction(other, *name[0], 1, 1, cast(*void)*second, Observe, null, null, Destroy) != SQLITE_OK { return 2 }
+    if !CheckProgress(database, other) { return 10 }
+    if !CheckBusy() { return 11 }
     if !Query(database, 10.0) || !Query(other, 100.0) || !Query(database, 10.0) ||
        first.calls != 10 || second.calls != 5 || first.destroyed != 0 || second.destroyed != 0 { return 3 }
     // SQLite invokes the replaced registration's destructor synchronously.

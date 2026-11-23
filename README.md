@@ -28,6 +28,9 @@ timeouts, change counts and database backup. `SqliteOpenText` opens a path
 from a Ziran string; `SqliteBindBlob` copies bytes including embedded NULs,
 and an empty slice binds an empty BLOB. Column pointers and error messages
 are borrowed from SQLite; consume or copy them before their owner changes.
+`SqliteColumnName` returns the prepared query's column label, including an
+explicit `AS` alias. Copy the label before another name call for that column,
+automatic reprepare or finalization.
 
 `SqliteGetAutocommit(database)` reports whether the live connection has no
 active transaction, following SQLite's `sqlite3_get_autocommit`. It returns
@@ -47,6 +50,21 @@ Do not free the same data again after an error. `SqliteUserData` returns this
 pointer inside the registered callback; each connection has its own
 registration. See the [function registration contract](https://www.sqlite.org/c3ref/create_function.html)
 and [user data contract](https://www.sqlite.org/c3ref/user_data.html).
+
+`SqliteProgressHandler(database, instructions, callback, data)` registers a C
+callback for one connection. Return a nonzero value to interrupt work with
+`SQLITE_INTERRUPT`. Pass zero instructions to clear the handler before freeing
+caller-owned data. Keep `data` alive while the handler is registered and avoid
+preparing statements, stepping them or modifying the connection in the
+callback. SQLite can also call the handler during statement preparation.
+See [SQLite's progress handler contract](https://www.sqlite.org/c3ref/progress_handler.html).
+
+`SqliteBusyHandler(database, callback, data)` installs a connection-local
+callback for lock contention. The callback receives the number of retries for
+the current lock and returns zero to stop waiting. SQLite then reports
+`SQLITE_BUSY`. Use a null callback or `SqliteBusyTimeout` to replace the handler
+before freeing its data. The callback must leave the invoking connection and
+its statements untouched. [SQLite busy handler](https://sqlite.org/c3ref/busy_handler.html)
 
 `SqliteValueType`, `SqliteValueBytes` and `SqliteValueBlob` inspect callback
 arguments; blob bytes are borrowed and may be null for empty values. Inspect
@@ -78,8 +96,8 @@ make check             # available backends, source and saved IR; native C callb
 make check TARGET=go   # one backend
 ```
 
-The current toolchain check needs a C compiler, Python and Go. Older toolchains
-also provide C++, Rust and Python backends and require their build tools. It tests
+The current toolchain check needs a C compiler and Go. Older toolchains use a
+Python test driver and also provide C++, Rust and Python backends. It tests
 Unicode text, statement reuse, large integers, binary data, empty BLOBs,
 floating-point values, NULLs, invalid SQL and database backup. This is a
 binding for the documented API above, rather than every SQLite extension.
