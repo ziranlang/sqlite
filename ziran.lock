@@ -4,7 +4,7 @@
     {
       "commit": "b09c88c14082339b66c7b7158d609a771e64ca69",
       "dependencies": {},
-      "id": "p193f493072e2b40b",
+      "id": "src_github_com_sqlite_sqlite_b09c88c14082",
       "name": "sqlite3",
       "ref": "b09c88c14082339b66c7b7158d609a771e64ca69",
       "source": true,
@@ -12,12 +12,12 @@
     }
   ],
   "root": {
-    "dependencies": {"sqlite3": "p193f493072e2b40b"},
+    "dependencies": {"sqlite3": "src_github_com_sqlite_sqlite_b09c88c14082"},
     "dependency_refs": {"sqlite3": "b09c88c14082339b66c7b7158d609a771e64ca69"},
     "name": "SQLite"
   },
   "toolchain": {
-    "commit": "5db3d3c39425d5dfe4bfe4a84e6f6e2e5a810ad0",
+    "commit": "0affd948205733bc370b6802f9730d8edf5e1e35",
     "ref": "5db3d3c39425d5dfe4bfe4a84e6f6e2e5a810ad0",
     "url": "https://git.waozi.xyz/ziranlang/ziran.git"
   }
